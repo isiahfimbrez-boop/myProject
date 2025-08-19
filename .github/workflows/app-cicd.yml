@@ -1,0 +1,41 @@
+name: Go App CI/CD (Docker Hub)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/<your-image-name>:${{ github.sha }}
+
+      - name: Configure AWS Credentials for EKS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # Use the EKS deployment role created by your Terraform
+          role-to-assume: arn:aws:iam::<your-aws-account-id>:role/github-actions-app-role
+          aws-region: us-east-1
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --region us-east-1 --name <your-eks-cluster-name>
+
+      - name: Deploy to Kubernetes
+        run: |
+          # Use the kubectl set image command to trigger a rolling update
+          kubectl set image deployment/<your-deployment-name> <your-container-name>="${{ secrets.DOCKERHUB_USERNAME }}/<your-image-name>:${{ github.sha }}"
